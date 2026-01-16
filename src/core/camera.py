@@ -16,7 +16,6 @@ class CameraManager:
         self.frame_width: int = 0
         self.frame_height: int = 0
 
-
     def start_capture(
         self,
         camera_id: int = 0,
