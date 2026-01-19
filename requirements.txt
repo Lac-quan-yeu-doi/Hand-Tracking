@@ -1,2 +1,3 @@
+# torch torchvision should be installed separately from the website
 mediapipe
 opencv-python
