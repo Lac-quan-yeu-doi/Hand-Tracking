@@ -1,147 +1,106 @@
 """
-data_preprocessor.py
+Trains & compares several ML models on your landmark dataset.
+Compares performance on validation + test set.
 
-This script:
-1. Traverses the dataset folders (train/test/val > 0-5)
-2. For each image:
-   - Loads it
-   - Applies augmentations (rotations + affine)
-   - Runs HandDetector to extract landmarks
-   - Saves original + augmented features to CSV
-
-Assumes:
-- frame_detection.py in same folder
-- models/hand_landmarker.task exists
-- Dataset root is './dataset/' (adjust DATASET_ROOT)
-- cv2, mediapipe installed locally
-
-Output: features.csv with columns:
-- label: int (0-5)
-- lm0_x, lm0_y, lm0_z, lm1_x, ... lm20_z  (21 landmarks * 3 coords)
+Run after you have:
+  train.csv
+  val.csv
+  test.csv
 """
 
-import os
-import cv2
-import numpy as np
 import pandas as pd
-from typing import List
-import math
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
+import warnings
 
-# Import your detector
-from frame_detection import HandDetector, HandResult
+warnings.filterwarnings("ignore", category=UserWarning)
 
-# Config
-DATASET_ROOT = "."  # Adjust if needed, e.g., "./fingers_dataset"
-MODEL_PATH = "models/hand_landmarker.task"
-OUTPUT_CSV = "hand_landmarks_features.csv"
+# ── Configuration ─────────────────────────────────────────────────────
+RANDOM_STATE = 42
+MODELS = {
+    "LogisticRegression": LogisticRegression(max_iter=1000, multi_class='multinomial', random_state=RANDOM_STATE),
+    "KNN": KNeighborsClassifier(n_neighbors=5),
+    "SVM (RBF)": SVC(kernel='rbf', C=1.0, probability=True, random_state=RANDOM_STATE),
+    "RandomForest": RandomForestClassifier(n_estimators=200, max_depth=None, random_state=RANDOM_STATE),
+    "GradientBoosting": GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, random_state=RANDOM_STATE),
+    "XGBoost": XGBClassifier(n_estimators=150, max_depth=6, learning_rate=0.1, use_label_encoder=False, eval_metric='mlogloss', random_state=RANDOM_STATE)
+}
 
-# Augmentation params
-ROTATIONS = [-30, -15, 15, 30]  # degrees
-AFFINE_SCALES = [0.9, 1.1]      # slight zoom in/out
-AFFINE_SHEARS = [5, -5]        # degrees shear
-
-
-def apply_rotation(image: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate image by angle degrees"""
-    h, w = image.shape[:2]
-    center = (w // 2, h // 2)
-    rot_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-    return cv2.warpAffine(image, rot_matrix, (w, h), flags=cv2.INTER_LINEAR)
-
-
-def apply_affine(image: np.ndarray, scale: float = 1.0, shear: float = 0.0) -> np.ndarray:
-    """Apply scale and shear affine transform"""
-    h, w = image.shape[:2]
-    affine_matrix = np.float32([
-        [scale, math.tan(math.radians(shear)), 0],
-        [0, scale, 0]
-    ])
-    return cv2.warpAffine(image, affine_matrix, (w, h), flags=cv2.INTER_LINEAR)
+# ── Data loading ──────────────────────────────────────────────────────
+def load_split(csv_path):
+    df = pd.read_csv(csv_path)
+    X = df.drop(columns=['label']).values
+    y = df['label'].values
+    return X, y
 
 
-def extract_landmarks(detector: HandDetector, image: np.ndarray) -> List[float]:
-    """
-    Run detection, extract flattened [x,y,z] * 21 for first hand (if detected)
-    Returns empty list if no hand or error
-    """
-    result = detector.detect(image)
-    if not result or not result.hand_landmarks:
-        return []
+print("Loading datasets...")
+X_train, y_train = load_split("dataset/train.csv")
+X_val,   y_val   = load_split("dataset/val.csv")
+X_test,  y_test  = load_split("dataset/test.csv")
 
-    # Take first hand (assume one main hand per image)
-    landmarks = result.hand_landmarks[0]  # List[NormalizedLandmark]
+print(f"Train: {X_train.shape[0]:4d} samples")
+print(f"Val  : {X_val.shape[0]:4d} samples")
+print(f"Test : {X_test.shape[0]:4d} samples")
 
-    flat_coords = []
-    for lm in landmarks:
-        flat_coords.extend([lm.x, lm.y, lm.z])
+# ── Preprocessing ─────────────────────────────────────────────────────
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val   = scaler.transform(X_val)
+X_test  = scaler.transform(X_test)
 
-    return flat_coords
+# ── Training & Evaluation ─────────────────────────────────────────────
+results = []
 
+print("\n" + "="*70)
+print("Training models...")
+print("="*70)
 
-def main():
-    detector = HandDetector(
-        model_path=MODEL_PATH,
-        num_hands=1,  # Assume one hand per image
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-        flip_horizontal=False  # Dataset likely not flipped
-    )
+for name, model in MODELS.items():
+    print(f"→ {name:<18} ... ", end="", flush=True)
+    
+    model.fit(X_train, y_train)
+    
+    # Predictions
+    y_pred_val  = model.predict(X_val)
+    y_pred_test = model.predict(X_test)
+    
+    acc_val  = accuracy_score(y_val,  y_pred_val)  * 100
+    acc_test = accuracy_score(y_test, y_pred_test) * 100
+    
+    results.append({
+        "Model": name,
+        "Val Acc (%)":  round(acc_val,  2),
+        "Test Acc (%)": round(acc_test, 2)
+    })
+    
+    print(f"Val: {acc_val:5.2f}% | Test: {acc_test:5.2f}%")
 
-    # Prepare DataFrame
-    columns = ['label'] + [f'lm{i}_{coord}' for i in range(21) for coord in ['x', 'y', 'z']]
-    data_rows = []
+# ── Show results table ────────────────────────────────────────────────
+print("\n" + "="*70)
+print("Final Results Comparison")
+print("="*70)
 
-    # Traverse dataset
-    for split in ['train', 'test', 'val']:
-        split_path = os.path.join(DATASET_ROOT, split)
-        if not os.path.exists(split_path):
-            print(f"Skipping {split} - path not found")
-            continue
+results_df = pd.DataFrame(results)
+results_df = results_df.sort_values("Test Acc (%)", ascending=False)
+print(results_df.to_string(index=False))
 
-        for label_str in ['0', '1', '2', '3', '4', '5']:
-            label = int(label_str)
-            folder_path = os.path.join(split_path, label_str)
-            if not os.path.exists(folder_path):
-                continue
+# ── Best model on test set ────────────────────────────────────────────
+best_model_name = results_df.iloc[0]["Model"]
+best_test_acc   = results_df.iloc[0]["Test Acc (%)"]
 
-            images = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+print(f"\nBest model (on test set): {best_model_name} → {best_test_acc:.2f}%")
 
-            for img_name in images:
-                img_path = os.path.join(folder_path, img_name)
-                image = cv2.imread(img_path)
-                if image is None:
-                    continue
-
-                # Original
-                coords = extract_landmarks(detector, image)
-                if coords:
-                    data_rows.append([label] + coords)
-
-                # Augmentations
-                # Rotations
-                for angle in ROTATIONS:
-                    aug_img = apply_rotation(image, angle)
-                    coords = extract_landmarks(detector, aug_img)
-                    if coords:
-                        data_rows.append([label] + coords)
-
-                # Affines (scale + shear combos)
-                for scale in AFFINE_SCALES:
-                    for shear in AFFINE_SHEARS:
-                        aug_img = apply_affine(image, scale=scale, shear=shear)
-                        coords = extract_landmarks(detector, aug_img)
-                        if coords:
-                            data_rows.append([label] + coords)
-
-            print(f"Processed {split}/{label_str} - {len(images)} images")
-
-    # Save to CSV
-    df = pd.DataFrame(data_rows, columns=columns)
-    df.to_csv(OUTPUT_CSV, index=False)
-    print(f"Saved {len(df)} samples to {OUTPUT_CSV}")
-
-    detector.close()
-
-
-if __name__ == "__main__":
-    main()
+# Optional: detailed report for the best model
+print(f"\nClassification Report for {best_model_name} (test set):")
+best_model = MODELS[best_model_name]
+best_model.fit(X_train, y_train)  # re-fit if needed
+y_pred_best = best_model.predict(X_test)
+print(classification_report(y_test, y_pred_best, digits=3))
