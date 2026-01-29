@@ -8,6 +8,9 @@ Run after you have:
   test.csv
 """
 
+import sys
+sys.path.append('D:/University/projectS/hand_tracking')
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -20,6 +23,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 import joblib
 import os
+import yaml
 import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -28,7 +32,12 @@ warnings.filterwarnings("ignore", category=UserWarning)
 model_output = 'models'
 os.makedirs(model_output, exist_ok=True)
 
-RANDOM_STATE = 42
+with open('src/configs/global_config.yaml', 'r') as f:
+    cfg = yaml.safe_load(f)
+
+RANDOM_STATE = cfg['SEED']
+
+# ── Models ─────────────────────────────────────────────────────────────
 MODELS = {
     "LogisticRegression": LogisticRegression(max_iter=1000, multi_class='multinomial', random_state=RANDOM_STATE),
     "KNN": KNeighborsClassifier(n_neighbors=5),
