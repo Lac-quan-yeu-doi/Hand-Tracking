@@ -7,9 +7,9 @@ Run after you have:
   val.csv
   test.csv
 """
-
 import sys
 sys.path.append('D:/University/projectS/hand_tracking')
+print("****************** ADDED ROOT DIRECTORY ******************")
 
 import pandas as pd
 import numpy as np
@@ -23,8 +23,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 import joblib
 import os
-import yaml
+# import yaml
 import warnings
+from src.training.config import cfg
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -32,14 +33,11 @@ warnings.filterwarnings("ignore", category=UserWarning)
 model_output = 'models'
 os.makedirs(model_output, exist_ok=True)
 
-with open('src/configs/global_config.yaml', 'r') as f:
-    cfg = yaml.safe_load(f)
-
 RANDOM_STATE = cfg['SEED']
 
 # ── Models ─────────────────────────────────────────────────────────────
 MODELS = {
-    "LogisticRegression": LogisticRegression(max_iter=1000, multi_class='multinomial', random_state=RANDOM_STATE),
+    "LogisticRegression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
     "KNN": KNeighborsClassifier(n_neighbors=5),
     "SVM (RBF)": SVC(kernel='rbf', C=1.0, probability=True, random_state=RANDOM_STATE),
     "RandomForest": RandomForestClassifier(n_estimators=200, max_depth=None, random_state=RANDOM_STATE),
