@@ -20,8 +20,10 @@ Requirements:
 - frame_detection.py in the same directory
 - mediapipe, opencv-python, pandas, numpy installed
 """
+
 import sys
-sys.path.append('D:/University/projectS/hand_tracking')
+
+sys.path.append("D:/University/projectS/hand_tracking")
 
 import os
 import cv2
@@ -31,28 +33,27 @@ import math
 from typing import List, Optional
 from tqdm import tqdm
 
-from src.deploy.core.frame_detector import HandDetector, HandResult
+from src.deploy.core.hand_detector import HandDetector, HandResult
 
 # ── Configuration ────────────────────────────────────────────────
-DATASET_ROOT    = "dataset/dataset-finger-count-0to5"
-MODEL_PATH      = "D:/University/projectS/hand_tracking/src/deploy/models/hand_landmarker.task"
+DATASET_ROOT = "dataset/dataset-finger-count-0to5"
+MODEL_PATH = (
+    "D:/University/projectS/hand_tracking/src/deploy/models/hand_landmarker.task"
+)
 
 # Augmentation settings (moderate to avoid too much distortion)
 ROTATION_DEGREES = [-25, -15, -10, 10, 15, 25]
 ROTATION_DEGREES = []
-SCALE_FACTORS    = [0.92, 1.08]
-SHEAR_DEGREES    = [-8, 8]
+SCALE_FACTORS = [0.92, 1.08]
+SHEAR_DEGREES = [-8, 8]
 
 # Detection settings
-MIN_CONFIDENCE   = 0.55           # slightly higher than default to filter noisy detections
+MIN_CONFIDENCE = 0.55  # slightly higher than default to filter noisy detections
 
 
 def get_affine_transform(scale: float = 1.0, shear_deg: float = 0.0) -> np.ndarray:
     """Return 2×3 affine matrix for scale + shear (around center)"""
-    return np.float32([
-        [scale, math.tan(math.radians(shear_deg)), 0],
-        [0,     scale,                            0]
-    ])
+    return np.float32([[scale, math.tan(math.radians(shear_deg)), 0], [0, scale, 0]])
 
 
 def augment_image(img: np.ndarray) -> List[np.ndarray]:
@@ -65,19 +66,25 @@ def augment_image(img: np.ndarray) -> List[np.ndarray]:
     # Rotations
     for angle in ROTATION_DEGREES:
         M = cv2.getRotationMatrix2D(center, angle, scale=1.0)
-        aug = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+        aug = cv2.warpAffine(
+            img, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT
+        )
         variants.append(aug)
 
     # Scale + shear combinations
     for scale in SCALE_FACTORS:
         for shear in SHEAR_DEGREES:
             M = get_affine_transform(scale, shear)
-            aug = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+            aug = cv2.warpAffine(
+                img, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT
+            )
             variants.append(aug)
 
     return variants
 
+
 from tqdm import tqdm
+
 
 def extract_flat_landmarks(result: Optional[HandResult]) -> Optional[List[float]]:
     """Return flattened [x,y,z, x,y,z, ...] for first hand or None if invalid"""
@@ -98,10 +105,10 @@ def extract_flat_landmarks(result: Optional[HandResult]) -> Optional[List[float]
 def main():
     detector = HandDetector(
         model_path=MODEL_PATH,
-        num_hands=1,                    # force single hand assumption
+        num_hands=1,  # force single hand assumption
         min_detection_confidence=MIN_CONFIDENCE,
         min_tracking_confidence=MIN_CONFIDENCE,
-        flip_horizontal=False           # dataset images usually not mirrored
+        flip_horizontal=False,  # dataset images usually not mirrored
     )
 
     columns = ["label"] + [f"lm{i}_{c}" for i in range(21) for c in ["x", "y", "z"]]
@@ -119,8 +126,11 @@ def main():
                 continue
 
             label = int(label_str)
-            files = [f for f in os.listdir(class_dir)
-                     if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+            files = [
+                f
+                for f in os.listdir(class_dir)
+                if f.lower().endswith((".jpg", ".jpeg", ".png"))
+            ]
 
             print(f"{split}/{label} → {len(files)} images")
 
@@ -149,8 +159,6 @@ def main():
     if not all_rows:
         print("No valid hand landmarks extracted.")
         return
-
-    
 
 
 if __name__ == "__main__":

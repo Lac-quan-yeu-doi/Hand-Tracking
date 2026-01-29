@@ -216,7 +216,12 @@ class HandDetector:
 if __name__ == "__main__":
     detector = HandDetector(model_path="models/hand_landmarker.task", num_hands=2)
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 60)
+
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # CRITICAL (reduces lag)
 
     while cap.isOpened():
         success, frame = cap.read()

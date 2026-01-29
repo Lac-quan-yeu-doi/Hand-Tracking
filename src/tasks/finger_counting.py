@@ -1,5 +1,6 @@
 import sys
-sys.path.append('D:/University/projectS/hand_tracking')
+
+sys.path.append("D:/University/projectS/hand_tracking")
 print("****************** ADDED ROOT DIRECTORY ******************")
 
 
@@ -10,39 +11,48 @@ import joblib
 from typing import List, Tuple
 
 # Import your detector (adjust path if needed)
-from src.deploy.core.frame_detector import HandDetector, HandResult
+from src.deploy.core.hand_detector import HandDetector, HandResult
 
 # ────────────────────────────────────────────────────────────────
 #  CONFIGURATION
 # ────────────────────────────────────────────────────────────────
 
-MODEL_PATH          = "../deploy/models/hand_landmarker.task"
-ML_MODEL_PATH       = "../training/finger_counting/models/KNN.joblib"       # ← your saved model
-ML_SCALER_PATH      = "../training/finger_counting/models/scaler.joblib"    # ← your saved scaler
+MODEL_PATH = "../deploy/models/hand_landmarker.task"
+ML_MODEL_PATH = "../training/finger_counting/models/KNN.joblib"  # ← your saved model
+ML_SCALER_PATH = (
+    "../training/finger_counting/models/scaler.joblib"  # ← your saved scaler
+)
 
-USE_ML              = True          # ← change to False to use old heuristic
-ML_NUM_HANDS_EXPECT = 2             # most finger-counting assumes 1 main hand
+USE_ML = True  # ← change to False to use old heuristic
+ML_NUM_HANDS_EXPECT = 2  # most finger-counting assumes 1 main hand
 
 # Landmark indices (same as before)
-THUMB_TIP   = 4
-INDEX_TIP   = 8
-MIDDLE_TIP  = 12
-RING_TIP    = 16
-PINKY_TIP   = 20
+THUMB_TIP = 4
+INDEX_TIP = 8
+MIDDLE_TIP = 12
+RING_TIP = 16
+PINKY_TIP = 20
 
-INDEX_PIP   = 6
-MIDDLE_PIP  = 10
-RING_PIP    = 14
-PINKY_PIP   = 18
-THUMB_IP    = 3
+INDEX_PIP = 6
+MIDDLE_PIP = 10
+RING_PIP = 14
+PINKY_PIP = 18
+THUMB_IP = 3
 
 
 # ────────────────────────────────────────────────────────────────
 #  HEURISTIC METHOD (your original)
 # ────────────────────────────────────────────────────────────────
 
-def is_finger_up(landmarks, tip_idx: int, pip_idx: int, is_thumb: bool = False,
-                 handedness: str = "Right", threshold: float = 0.02) -> bool:
+
+def is_finger_up(
+    landmarks,
+    tip_idx: int,
+    pip_idx: int,
+    is_thumb: bool = False,
+    handedness: str = "Right",
+    threshold: float = 0.02,
+) -> bool:
     tip = landmarks[tip_idx]
     ref = landmarks[pip_idx]
 
@@ -90,6 +100,7 @@ def count_raised_fingers_heuristic(result: HandResult) -> Tuple[int, List[str]]:
 #  ML METHOD
 # ────────────────────────────────────────────────────────────────
 
+
 def extract_features(result: HandResult) -> np.ndarray | None:
     """
     Extract the same 63 features your model was trained on.
@@ -114,8 +125,8 @@ def count_raised_fingers_ml(result: HandResult, model, scaler) -> Tuple[int, Lis
         return 0, []
 
     features_scaled = scaler.transform(features)
-    pred = model.predict(features_scaled)[0]          # integer 0–5
-    prob = model.predict_proba(features_scaled)[0]    # optional confidence
+    pred = model.predict(features_scaled)[0]  # integer 0–5
+    prob = model.predict_proba(features_scaled)[0]  # optional confidence
 
     # For display: we show the predicted number
     # You can also map back to finger names if you trained per-finger classifiers
@@ -130,7 +141,9 @@ def count_raised_fingers_ml(result: HandResult, model, scaler) -> Tuple[int, Lis
         5: ["Thumb", "Index", "Middle", "Ring", "Pinky"],
     }.get(count, ["?"])
 
-    names_with_side = [f"{name} ({result.get_handedness_labels()[0]})" for name in finger_names]
+    names_with_side = [
+        f"{name} ({result.get_handedness_labels()[0]})" for name in finger_names
+    ]
 
     return count, names_with_side
 
@@ -139,13 +152,14 @@ def count_raised_fingers_ml(result: HandResult, model, scaler) -> Tuple[int, Lis
 #  MAIN LOOP
 # ────────────────────────────────────────────────────────────────
 
+
 def main():
     detector = HandDetector(
         model_path=MODEL_PATH,
         num_hands=2,
         min_detection_confidence=0.6,
         min_tracking_confidence=0.5,
-        flip_horizontal=True
+        flip_horizontal=True,
     )
 
     # Load ML model & scaler (only if using ML)
@@ -154,7 +168,7 @@ def main():
     global USE_ML
     if USE_ML:
         try:
-            model  = joblib.load(ML_MODEL_PATH)
+            model = joblib.load(ML_MODEL_PATH)
             scaler = joblib.load(ML_SCALER_PATH)
             print("ML model and scaler loaded successfully")
         except Exception as e:
@@ -187,12 +201,13 @@ def main():
 
         if result:
             detector.draw_landmarks(
-                display_frame, result,
+                display_frame,
+                result,
                 with_skeleton=True,
                 landmark_color=(0, 255, 120),
                 connection_color=(220, 100, 255),
                 landmark_radius=4,
-                connection_thickness=2
+                connection_thickness=2,
             )
 
             if USE_ML and model is not None and scaler is not None:
@@ -205,19 +220,47 @@ def main():
             handed_str = ", ".join(result.get_handedness_labels()) or "Unknown"
             finger_str = ", ".join(fingers_list) if fingers_list else "None"
 
-            cv2.putText(display_frame, f"Fingers up: {count}  ({method_used})", (30, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 100), 3)
-            cv2.putText(display_frame, f"→ {finger_str}", (30, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 220, 255), 2)
-            cv2.putText(display_frame, f"Hands: {handed_str}", (30, 140),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 255), 2)
+            cv2.putText(
+                display_frame,
+                f"Fingers up: {count}  ({method_used})",
+                (30, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.1,
+                (0, 255, 100),
+                3,
+            )
+            cv2.putText(
+                display_frame,
+                f"→ {finger_str}",
+                (30, 100),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (200, 220, 255),
+                2,
+            )
+            cv2.putText(
+                display_frame,
+                f"Hands: {handed_str}",
+                (30, 140),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (180, 180, 255),
+                2,
+            )
 
         # FPS
         now = time.time()
         fps = 1 / (now - prev_time + 1e-8)
         prev_time = now
-        cv2.putText(display_frame, f"FPS: {fps:.1f}", (30, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 180, 255), 2)
+        cv2.putText(
+            display_frame,
+            f"FPS: {fps:.1f}",
+            (30, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 180, 255),
+            2,
+        )
 
         cv2.imshow("Finger Counting", display_frame)
 
