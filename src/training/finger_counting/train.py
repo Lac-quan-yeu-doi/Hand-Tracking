@@ -18,11 +18,16 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
+import joblib
+import os
 import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # ── Configuration ─────────────────────────────────────────────────────
+model_output = 'models'
+os.makedirs(model_output, exist_ok=True)
+
 RANDOM_STATE = 42
 MODELS = {
     "LogisticRegression": LogisticRegression(max_iter=1000, multi_class='multinomial', random_state=RANDOM_STATE),
@@ -80,8 +85,10 @@ for name, model in MODELS.items():
         "Val Acc (%)":  round(acc_val,  2),
         "Test Acc (%)": round(acc_test, 2)
     })
-    
     print(f"Val: {acc_val:5.2f}% | Test: {acc_test:5.2f}%")
+    
+    joblib.dump(model, f"{model_output}/{name}.joblib")
+    print(f'Model {name} saved!')
 
 # ── Show results table ────────────────────────────────────────────────
 print("\n" + "="*70)
