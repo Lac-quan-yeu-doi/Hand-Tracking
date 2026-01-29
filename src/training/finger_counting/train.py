@@ -97,6 +97,9 @@ for name, model in MODELS.items():
     joblib.dump(model, f"{model_output}/{name}.joblib")
     print(f'Model {name} saved!')
 
+joblib.dump(scaler, f"{model_output}/scaler.joblib")
+print("Scaler saved")
+
 # ── Show results table ────────────────────────────────────────────────
 print("\n" + "="*70)
 print("Final Results Comparison")
